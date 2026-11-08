@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Enchanted Hills Estate · Availability</title>
+<style>
+  :root{
+    --bg:#faf7f2; --card:#fff; --ink:#2f2a24; --muted:#8a8178; --line:#e8e1d7;
+    --booked:#a8504f; --bookedbg:#f4e1df; --hold:#b8871f; --holdbg:#fbf0d4;
+    --open:#3d7a57; --openbg:#e6f1ea;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
+  .wrap{max-width:520px;margin:0 auto;padding:22px 16px 40px}
+  header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+  header h1{font-family:Georgia,"Times New Roman",serif;font-weight:normal;font-size:23px;margin:0;letter-spacing:.01em}
+  header p{margin:4px 0 0;color:var(--muted);font-size:13px}
+  .pill{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:7px 12px;font-size:12px;cursor:pointer;white-space:nowrap}
+  .pill.on{background:var(--openbg);border-color:var(--open);color:var(--open);font-weight:600}
+  .nav{display:flex;align-items:center;justify-content:space-between;margin:22px 0 10px}
+  .nav h2{font-size:17px;margin:0;font-weight:600}
+  .nav button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;
+              width:42px;height:42px;font-size:20px;line-height:1;cursor:pointer}
+  .todaybtn{font-size:12px!important;width:auto!important;padding:0 12px}
+  .navr{display:flex;gap:6px}
+  .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+  .dow{text-align:center;font-size:11px;color:var(--muted);padding:4px 0;text-transform:uppercase;letter-spacing:.06em}
+  .day{aspect-ratio:1/1;border-radius:10px;background:var(--card);border:1px solid var(--line);color:var(--ink);
+       display:flex;flex-direction:column;align-items:center;justify-content:center;
+       font-size:15px;cursor:pointer;user-select:none;padding:0;font-family:inherit}
+  .day.empty{background:none;border:none;cursor:default}
+  .day.past{opacity:.35}
+  .day.booked{background:var(--bookedbg);border-color:var(--booked);color:var(--booked);font-weight:600}
+  .day.hold{background:var(--holdbg);border-color:var(--hold);color:#8a6418;font-weight:600}
+  .day.today{outline:2px solid var(--ink);outline-offset:-3px}
+  .day.sel{box-shadow:0 0 0 3px rgba(47,42,36,.3)}
+  .day small{font-size:8.5px;font-weight:700;letter-spacing:.04em;margin-top:2px;text-transform:uppercase}
+  .legend{display:flex;gap:16px;font-size:12px;color:var(--muted);margin:12px 2px 0;flex-wrap:wrap}
+  .legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px;border:1px solid}
+  .card{margin-top:14px;padding:14px 15px;border-radius:14px;background:var(--card);border:1px solid var(--line);font-size:14px;line-height:1.45}
+  .card .k{font-size:12px;color:var(--muted)}
+  .card h4{margin:0 0 2px;font-size:16px}
+  .card.booked h4{color:var(--booked)} .card.hold h4{color:#8a6418} .card.open h4{color:var(--open)}
+  .who{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+  .who div{margin:2px 0}
+  .tag{display:inline-block;font-size:11px;font-weight:700;border-radius:6px;padding:1px 6px;margin-left:6px;background:var(--bg);color:var(--muted);vertical-align:1px}
+  .btn{display:block;width:100%;margin-top:12px;border:none;border-radius:12px;padding:13px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}
+  .btn.primary{background:var(--ink);color:#fff}
+  .btn.hold{background:var(--hold);color:#fff}
+  .btn.ghost{background:none;border:1px solid var(--line);color:var(--ink);font-weight:500}
+  .btn.danger{background:var(--booked);color:#fff}
+  .btn:disabled{opacity:.5}
+  .acts{display:flex;gap:8px;margin-top:10px}
+  .acts .btn{margin-top:0;padding:10px;font-size:14px}
+  .who hr{border:none;border-top:1px solid var(--line);margin:12px 0}
+  label{display:block;font-size:12px;color:var(--muted);margin:12px 0 4px}
+  input,select,textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:16px;font-family:inherit;background:#fff;color:var(--ink)}
+  textarea{resize:vertical;min-height:60px}
+  .seg{display:flex;gap:6px}
+  .seg button{flex:1;border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px 0;font-size:14px;cursor:pointer;font-family:inherit;color:var(--ink)}
+  .seg button.on{background:var(--holdbg);border-color:var(--hold);color:#8a6418;font-weight:600}
+  .msg{margin-top:10px;font-size:13px}
+  .msg.err{color:var(--booked)} .msg.ok{color:var(--open)}
+  .section h3{font-size:14px;margin:26px 0 10px;font-weight:600}
+  .filters{display:flex;gap:6px;margin-bottom:10px}
+  .filters button{border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer}
+  .filters button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+  .list{display:flex;flex-direction:column;gap:6px}
+  .row{display:flex;justify-content:space-between;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 13px;font-size:14px;cursor:pointer}
+  .row span{font-size:11px;font-weight:700;color:var(--open);background:var(--openbg);border-radius:999px;padding:3px 8px;letter-spacing:.03em}
+  .more{margin-top:8px;width:100%;border:1px dashed var(--line);background:none;color:var(--muted);border-radius:10px;padding:10px;font-size:13px;cursor:pointer}
+  footer{margin-top:28px;font-size:11px;color:var(--muted);text-align:center;line-height:1.5}
+  .err{padding:16px;background:var(--bookedbg);border-radius:12px;color:var(--booked);font-size:14px}
+  .hidden{display:none!important}
+  .tabs{display:flex;background:var(--line);border-radius:12px;padding:3px;margin-top:18px}
+  .tabs button{flex:1;border:none;background:none;padding:9px 0;border-radius:10px;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;font-family:inherit}
+  .tabs button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .tl-head{display:flex;justify-content:space-between;align-items:center;margin:22px 0 4px}
+  .tl-head h2{font-size:17px;margin:0}
+  .grp{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:18px 2px 8px}
+  .tour{display:flex;gap:12px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 13px;margin-bottom:6px;cursor:pointer}
+  .tour .tm{width:62px;flex:none;font-size:13px;font-weight:600;line-height:1.25}
+  .tour .tm span{display:block;font-size:11px;font-weight:500;color:var(--muted)}
+  .tour .nm{flex:1;font-size:15px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .chip{flex:none;font-size:10.5px;font-weight:700;border-radius:999px;padding:3px 8px;letter-spacing:.03em;text-transform:uppercase}
+  .chip.need{background:var(--holdbg);color:#8a6418}
+  .chip.done{background:var(--openbg);color:var(--open)}
+  .chip.miss{background:var(--bookedbg);color:var(--booked)}
+  .chip.wait{background:var(--bg);color:var(--muted);border:1px solid var(--line)}
+  .back{border:none;background:none;color:var(--muted);font-size:14px;padding:16px 0 4px;cursor:pointer;font-family:inherit}
+  .contact{display:flex;gap:8px;margin-top:12px}
+  .contact a{flex:1;text-align:center;border:1px solid var(--line);border-radius:10px;padding:9px 0;font-size:13px;color:var(--ink);text-decoration:none;font-weight:600}
+  .fs{margin-top:12px}
+  .fs > h5{margin:0 0 2px;font-size:14px}
+  .fs .sub{font-size:12px;color:var(--muted);margin-bottom:8px}
+  .opts{display:flex;flex-wrap:wrap;gap:6px}
+  .opts button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:10px 12px;font-size:14px;cursor:pointer;font-family:inherit;color:var(--ink);flex:1 1 auto}
+  .opts button.on{background:var(--ink);border-color:var(--ink);color:#fff;font-weight:600}
+  .opts.c3 button{flex:1 1 30%}
+  .opts.c4 button{flex:1 1 22%;padding:10px 0}
+  .row2{display:flex;gap:8px;margin-top:8px}
+  .row2 > *{flex:1}
+  details.opt{margin-top:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 15px}
+  details.opt summary{font-size:14px;font-weight:600;cursor:pointer}
+  details.opt summary span{font-weight:400;color:var(--muted);font-size:12px}
+  .savebar{position:sticky;bottom:0;background:linear-gradient(transparent,var(--bg) 30%);padding:18px 0 8px}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:11px 18px;border-radius:999px;font-size:14px;z-index:9}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Enchanted Hills Estate</h1>
+      <p>Venue availability for tours</p>
+    </div>
+    <button class="pill" id="guideBtn">Guide sign-in</button>
+  </header>
+
+  <div class="card hidden" id="signin">
+    <h4>Tour guide access</h4>
+    <div class="k">Enter the guide passcode to see who's booked and place soft holds.</div>
+    <label for="pin">Passcode</label>
+    <input id="pin" type="password" inputmode="numeric" autocomplete="off">
+    <button class="btn primary" id="pinGo">Unlock</button>
+    <div class="msg" id="pinMsg"></div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button data-tab="avail" class="on">Availability</button>
+    <button data-tab="tours">Tours</button>
+  </div>
+
+  <section id="availView">
+  <div class="nav">
+    <h2 id="month"></h2>
+    <div class="navr">
+      <button class="todaybtn" id="todayBtn">Today</button>
+      <button id="prev" aria-label="Previous month">&#8249;</button>
+      <button id="next" aria-label="Next month">&#8250;</button>
+    </div>
+  </div>
+  <div class="grid" id="grid"></div>
+  <div class="legend">
+    <div><i style="background:var(--card);border-color:var(--line)"></i>Available</div>
+    <div><i style="background:var(--bookedbg);border-color:var(--booked)"></i>Booked</div>
+    <div><i style="background:var(--holdbg);border-color:var(--hold)"></i>Soft hold</div>
+  </div>
+  <div class="card" id="status">Tap a date to check it.</div>
+
+  <div class="section">
+    <h3>Next open weekend dates</h3>
+    <div class="filters" id="filters">
+      <button data-d="5" class="on">Fri</button>
+      <button data-d="6" class="on">Sat</button>
+      <button data-d="0" class="on">Sun</button>
+    </div>
+    <div class="list" id="list"></div>
+    <button class="more" id="more">Show more</button>
+  </div>
+  </section>
+
+  <section id="toursView" class="hidden"><div id="toursBody"></div></section>
+
+  <footer id="foot"></footer>
+</div>
+
+<script>
+var DATA = /*__DATA__*/null;
+var MOCK = /*__MOCK__*/null;
+// Set only in the hosted build (GitHub Pages): the Apps Script /exec URL. The page then talks to
+// the script as a JSON API with no Google cookies, which avoids the multi-account
+// "unable to open the file" error and browsers that block Google's cookies.
+var API = "https://script.google.com/macros/s/AKfycbwW2EHSxeYV859nrQjtuiBP6xofB-hFaYzNARSMlP1RcZrJh35TM5Aqj3wH8Kkn1_mF/exec";
+
+function apiCall(fn, args, ok, fail) {
+  var x = new XMLHttpRequest();
+  x.open('POST', API);
+  x.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
+  x.timeout = 60000;
+  x.onload = function () {
+    var r = null;
+    try { r = JSON.parse(x.responseText); } catch (e) {}
+    if (r && r.ok) ok(r.data); else fail((r && r.error) || 'Could not reach the booking sheet. Try again.');
+  };
+  x.onerror = x.ontimeout = function () { fail('No connection. Check your signal and try again.'); };
+  x.send(JSON.stringify({ fn: fn, args: args }));
+}
+
+(function boot() {
+  if (!DATA && API) {
+    document.getElementById('foot').textContent = 'Loading availability…';
+    apiCall('availPublicData', [], function (d) { DATA = d; boot(); }, function () {
+      document.querySelector('.wrap').innerHTML = '<div class="err">Could not load availability. Please refresh.</div>';
+    });
+    return;
+  }
+  if (!DATA) {
+    document.querySelector('.wrap').innerHTML = '<div class="err">Could not load availability. Please refresh.</div>';
+    return;
+  }
+
+  // ---- server bridge (JSON API when hosted, Apps Script when served by doGet, mock in preview) ----
+  function call(fn, args, ok, fail) {
+    if (API) {
+      apiCall(fn, args, ok, fail);
+    } else if (typeof google !== 'undefined' && google.script && google.script.run) {
+      var r = google.script.run.withSuccessHandler(ok).withFailureHandler(function (e) { fail((e && e.message) || String(e)); });
+      r[fn].apply(r, args);
+    } else if (MOCK) {
+      setTimeout(function () { try { ok(MOCK[fn].apply(null, args)); } catch (e) { fail(e.message); } }, 250);
+    } else { fail('Not connected.'); }
+  }
+  function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return null; } }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+  var MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  var DOWL = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+  var booked = {}, hold = {}, details = null, pin = null;
+  function load(d) {
+    booked = {}; hold = {};
+    if (Array.isArray(d.booked)) { d.booked.forEach(function (k) { booked[k] = 1; }); d.holds.forEach(function (k) { hold[k] = 1; }); details = null; }
+    else { booked = d.booked; hold = d.holds; details = true; }
+    DATA = d;
+  }
+  load(DATA);
+
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var view = new Date(today.getFullYear(), today.getMonth(), 1);
+  var selected = null, mode = null, holdDays = 7, customDays = false;
+  var days = { 5: true, 6: true, 0: true };
+  var listCount = 10;
+
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function key(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function fromKey(k) { var p = k.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function statusOf(k) { return booked[k] ? 'booked' : hold[k] ? 'hold' : 'open'; }
+  function longDate(d) { return DOWL[d.getDay()] + ', ' + MONTHS[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear(); }
+  function shortDate(d) { return DOW[d.getDay()] + ', ' + MONTHS[d.getMonth()].slice(0, 3) + ' ' + d.getDate() + ', ' + d.getFullYear(); }
+  function $(id) { return document.getElementById(id); }
+
+  function renderGrid() {
+    $('month').textContent = MONTHS[view.getMonth()] + ' ' + view.getFullYear();
+    var html = DOW.map(function (d) { return '<div class="dow">' + d.charAt(0) + '</div>'; }).join('');
+    var first = view.getDay(), n = new Date(view.getFullYear(), view.getMonth() + 1, 0).getDate();
+    for (var i = 0; i < first; i++) html += '<div class="day empty"></div>';
+    for (var dn = 1; dn <= n; dn++) {
+      var d = new Date(view.getFullYear(), view.getMonth(), dn), k = key(d), s = statusOf(k), cls = 'day';
+      if (s !== 'open') cls += ' ' + s;
+      if (d < today) cls += ' past';
+      if (d.getTime() === today.getTime()) cls += ' today';
+      if (selected === k) cls += ' sel';
+      html += '<button class="' + cls + '" data-k="' + k + '">' + dn + (s === 'booked' ? '<small>Booked</small>' : s === 'hold' ? '<small>Hold</small>' : '') + '</button>';
+    }
+    $('grid').innerHTML = html;
+  }
+
+  function renderStatus() {
+    var el = $('status');
+    if (!selected) { el.className = 'card'; el.innerHTML = 'Tap a date to check it.'; return; }
+    var d = fromKey(selected), s = statusOf(selected), past = d < today, h = '';
+    el.className = 'card ' + s;
+    if (s === 'booked') {
+      h = '<h4>Booked</h4><div class="k">' + longDate(d) + '</div>';
+      if (details) h += '<div class="who">' + booked[selected].map(function (b) { return '<div class="k">Booked by</div><div><b>' + esc(b.name) + '</b></div>'; }).join('') + '</div>';
+    } else if (s === 'hold') {
+      h = '<h4>Soft hold</h4><div class="k">' + longDate(d) + '</div>';
+      if (details) h += '<div class="who">' + hold[selected].map(function (x, i) {
+        var t = '<div class="k">Held by</div><div><b>' + esc(x.name) + '</b></div><div class="k">Hold expires ' + esc(x.ends) + (x.notes ? ' · ' + esc(x.notes) : '') + '</div>';
+        if (mode === 'extend:' + i) {
+          t += '<label>Extend by</label>' + dayPicker() + byField() +
+               '<button class="btn hold" data-act="doExtend" data-i="' + i + '">Extend hold</button>' +
+               '<button class="btn ghost" data-act="cancel">Cancel</button><div class="msg" id="hMsg"></div>';
+        } else if (mode === 'release:' + i) {
+          t += '<div style="margin-top:12px">Release this hold? The date will show as open right away. The row stays in the sheet, marked as released.</div>' + byField() +
+               '<button class="btn danger" data-act="doRelease" data-i="' + i + '">Yes, release hold</button>' +
+               '<button class="btn ghost" data-act="cancel">Keep hold</button><div class="msg" id="hMsg"></div>';
+        } else {
+          t += '<div class="acts"><button class="btn hold" data-act="extend" data-i="' + i + '">Extend</button>' +
+               '<button class="btn ghost" data-act="release" data-i="' + i + '">Release</button></div>';
+        }
+        return t;
+      }).join('<hr>') + '</div>';
+      else h += '<div style="margin-top:6px">Someone is holding this date. It may open up.</div>';
+    } else {
+      h = '<h4>' + (past ? 'Past date' : 'Available') + '</h4><div class="k">' + longDate(d) + '</div>';
+      if (!past && details && mode !== 'place') h += '<button class="btn hold" data-act="place">Place a soft hold</button>';
+      if (!past && details && mode === 'place') {
+        h += '<label for="hName">Couple name</label><input id="hName" placeholder="e.g. Jamie and Alex" maxlength="80">' +
+             '<label>Hold length</label>' + dayPicker() +
+             '<label for="hNotes">Notes (optional)</label><textarea id="hNotes" maxlength="200" placeholder="Toured today, deciding by Friday"></textarea>' +
+             byField() +
+             '<button class="btn hold" data-act="doPlace">Place hold on ' + shortDate(d) + '</button>' +
+             '<button class="btn ghost" data-act="cancel">Cancel</button><div class="msg" id="hMsg"></div>';
+      }
+      if (!past && !details) h += '<div style="margin-top:6px">This date is open.</div>';
+    }
+    el.innerHTML = h;
+  }
+
+  function dayPicker() {
+    return '<div class="seg" id="seg">' +
+      [3, 7, 14].map(function (n) { return '<button data-n="' + n + '" class="' + (!customDays && n === holdDays ? 'on' : '') + '">' + n + ' days</button>'; }).join('') +
+      '<button data-n="c" class="' + (customDays ? 'on' : '') + '">Custom</button></div>' +
+      '<input id="customDays" class="' + (customDays ? '' : 'hidden') + '" type="number" inputmode="numeric" min="1" max="60" placeholder="Number of days (e.g. 5 or 10)" style="margin-top:8px">';
+  }
+  function byField() {
+    return '<label for="hBy">Your name</label><input id="hBy" maxlength="40" value="' + esc(store('eheGuide') || '') + '">';
+  }
+  function readDays() {
+    if (!customDays) return holdDays;
+    var v = parseInt($('customDays').value, 10);
+    return v >= 1 && v <= 60 ? v : null;
+  }
+  function openMode(m) { mode = m; holdDays = 7; customDays = false; renderStatus(); }
+
+  function renderList() {
+    var out = [], d = new Date(today), guard = 0;
+    while (out.length < listCount && guard++ < 1500) {
+      if (days[d.getDay()] && statusOf(key(d)) === 'open') out.push(new Date(d));
+      d.setDate(d.getDate() + 1);
+    }
+    $('list').innerHTML = out.length
+      ? out.map(function (x) { return '<div class="row" data-k="' + key(x) + '">' + shortDate(x) + '<span>OPEN</span></div>'; }).join('')
+      : '<div class="card">Pick at least one day above.</div>';
+  }
+
+  function renderGuide() {
+    $('guideBtn').textContent = details ? 'Guide view ✓' : 'Guide sign-in';
+    $('guideBtn').classList.toggle('on', !!details);
+    var up = new Date(DATA.updated);
+    $('foot').innerHTML = 'Updated ' + up.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) +
+      '<br>Live from the booking sheet. Refresh for the latest.' + (details ? '<br><a href="#" id="signout" style="color:inherit">Sign out of guide view</a>' : '');
+  }
+  function renderAll() { renderGrid(); renderStatus(); renderList(); renderGuide(); }
+
+  function select(k) { selected = k; mode = null; renderGrid(); renderStatus(); }
+
+  function unlock(p, quiet) {
+    $('pinGo').disabled = true; $('pinMsg').textContent = quiet ? '' : 'Checking…'; $('pinMsg').className = 'msg';
+    call('availGuideData', [p], function (d) {
+      pin = p; store('ehePin', p); load(d);
+      $('signin').classList.add('hidden'); $('pinGo').disabled = false; $('pin').value = '';
+      renderAll();
+      if (window.EHE_TOURS) window.EHE_TOURS.unlocked();
+    }, function (m) {
+      store('ehePin', null); $('pinGo').disabled = false;
+      if (!quiet) { $('pinMsg').textContent = m; $('pinMsg').className = 'msg err'; }
+    });
+  }
+
+  // ---- events ----
+  $('grid').addEventListener('click', function (e) { var b = e.target.closest('[data-k]'); if (b) select(b.getAttribute('data-k')); });
+  $('list').addEventListener('click', function (e) {
+    var r = e.target.closest('[data-k]'); if (!r) return;
+    var k = r.getAttribute('data-k'); view = fromKey(k); view.setDate(1); select(k);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+  $('filters').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    var dd = +b.getAttribute('data-d'); days[dd] = !days[dd]; b.classList.toggle('on', !!days[dd]); renderList();
+  });
+  $('more').onclick = function () { listCount += 10; renderList(); };
+  $('prev').onclick = function () { view = new Date(view.getFullYear(), view.getMonth() - 1, 1); renderGrid(); };
+  $('next').onclick = function () { view = new Date(view.getFullYear(), view.getMonth() + 1, 1); renderGrid(); };
+  $('todayBtn').onclick = function () { view = new Date(today.getFullYear(), today.getMonth(), 1); select(key(today)); };
+  $('guideBtn').onclick = function () { if (!details) { $('signin').classList.toggle('hidden'); $('pin').focus(); } };
+  $('pinGo').onclick = function () { var p = $('pin').value.trim(); if (p) unlock(p); };
+  $('pin').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('pinGo').click(); });
+  document.addEventListener('click', function (e) {
+    if (e.target.id === 'signout') { e.preventDefault(); store('ehePin', null); location.reload(); }
+  });
+
+  function fail(t) { return function (m) { t.disabled = false; var msg = $('hMsg'); msg.textContent = m; msg.className = 'msg err'; }; }
+  function done(text) {
+    return function (d) {
+      load(d); mode = null; renderAll();
+      var m = document.createElement('div'); m.className = 'msg ok'; m.textContent = text; $('status').appendChild(m);
+    };
+  }
+  function need(cond, text) { if (cond) return true; var msg = $('hMsg'); msg.textContent = text; msg.className = 'msg err'; return false; }
+
+  $('status').addEventListener('click', function (e) {
+    var t = e.target.closest('button'); if (!t) return;
+    var seg = t.closest('#seg');
+    if (seg) {
+      var n = t.getAttribute('data-n');
+      customDays = n === 'c'; if (!customDays) holdDays = +n;
+      [].forEach.call(seg.querySelectorAll('button'), function (b) { b.classList.toggle('on', b === t); });
+      $('customDays').classList.toggle('hidden', !customDays);
+      if (customDays) $('customDays').focus();
+      return;
+    }
+    var act = t.getAttribute('data-act'), i = +t.getAttribute('data-i');
+    if (act === 'place') { openMode('place'); $('hName').focus(); return; }
+    if (act === 'extend' || act === 'release') { openMode(act + ':' + i); return; }
+    if (act === 'cancel') { mode = null; renderStatus(); return; }
+    if (!act) return;
+
+    var by = $('hBy').value.trim();
+    var h = act !== 'doPlace' ? hold[selected][i] : null;
+    var nDays = act !== 'doRelease' ? readDays() : 0;
+    if (act === 'doPlace' && !need($('hName').value.trim(), 'Add the couple\'s name.')) return;
+    if (act !== 'doRelease' && !need(nDays, 'Enter a number of days from 1 to 60.')) return;
+    if (!need(by, 'Add your name.')) return;
+    store('eheGuide', by);
+    t.disabled = true; $('hMsg').textContent = 'Saving to the master sheet\u2026'; $('hMsg').className = 'msg';
+
+    if (act === 'doPlace') {
+      call('availPlaceHold', [pin, { date: selected, name: $('hName').value.trim(), days: nDays, notes: $('hNotes').value.trim(), by: by }],
+        done('Hold placed for ' + nDays + ' days and added to the Soft Hold Tracker.'), fail(t));
+    } else if (act === 'doExtend') {
+      call('availExtendHold', [pin, { date: selected, row: h.row, name: h.name, days: nDays, by: by }],
+        done('Hold extended by ' + nDays + ' days.'), fail(t));
+    } else if (act === 'doRelease') {
+      call('availReleaseHold', [pin, { date: selected, row: h.row, name: h.name, by: by }],
+        done('Hold released. The date is open again.'), fail(t));
+    }
+  });
+
+  window.EHE = {
+    call: call, esc: esc, store: store,
+    pin: function () { return pin; },
+    unlocked: function () { return !!details; },
+    openSignin: function () { $('signin').classList.remove('hidden'); window.scrollTo({ top: 0, behavior: 'smooth' }); $('pin').focus(); }
+  };
+  // When availability loads over the API, the Tours script has already run and is waiting for window.EHE.
+  if (window.EHE_TOURS_INIT) window.EHE_TOURS_INIT();
+
+  renderAll();
+  var saved = store('ehePin');
+  if (saved) unlock(saved, true);
+  if (MOCK && MOCK.demo) MOCK.demo({ unlock: unlock, select: select, setView: function (k) { view = fromKey(k); view.setDate(1); },
+                                    openMode: openMode, $: $ });
+})();
+</script>
+<script>
+function eheToursInit() {
+  if (!window.EHE || window.EHE_TOURS) return;
+  var E = window.EHE, esc = E.esc;
+  var MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  var tours = null, current = null, f = null, loading = false, tab = 'avail';
+  function $(id) { return document.getElementById(id); }
+  function body(h) { $('toursBody').innerHTML = h; }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function parseDT(s) { var m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/); return m ? new Date(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0)) : null; }
+  function timeStr(d) { var h = d.getHours(), m = d.getMinutes(); return ((h % 12) || 12) + (m ? ':' + pad(m) : '') + (h < 12 ? ' AM' : ' PM'); }
+  function dayStr(d) { return DOW[d.getDay()] + ', ' + MONTHS[d.getMonth()].slice(0, 3) + ' ' + d.getDate(); }
+  function toast(t) { var el = document.createElement('div'); el.className = 'toast'; el.textContent = t; document.body.appendChild(el); setTimeout(function () { el.remove(); }, 2600); }
+
+  // ---- option sets (labels are what gets saved to the sheet) ----
+  var OPT = {
+    outcome: ['Toured', 'No-show', 'Cancelled'],
+    tourType: ['In person', 'Virtual'],
+    tfType: ['Specific date', 'Month', 'Season', 'Not sure yet'],
+    season: ['Spring', 'Summer', 'Fall', 'Winter'],
+    days: ['Fri', 'Sat', 'Sun', 'Weekday'],
+    interest: ['Hot', 'Warm', 'Cold'],
+    easy: ['Easy', 'Neutral', 'Difficult'],
+    planning: ['Has a planner', 'Needs one (FEE)', 'Undecided'],
+    allInc: ['Yes', 'Maybe', 'No'],
+    budget: ['Under $25k', '$25–40k', '$40–60k', '$60k+'],
+    next: ['Send pricing', 'Send contract', 'Place soft hold', 'Schedule 2nd visit', 'Follow up', 'Ready to book', 'Not a fit']
+  };
+
+  // ---- tabs ----
+  $('tabs').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    tab = b.getAttribute('data-tab');
+    [].forEach.call($('tabs').children, function (x) { x.classList.toggle('on', x === b); });
+    $('availView').classList.toggle('hidden', tab !== 'avail');
+    $('toursView').classList.toggle('hidden', tab !== 'tours');
+    if (tab === 'tours') showList(!tours);
+  });
+
+  function showList(reload) {
+    current = null;
+    if (!E.unlocked()) {
+      body('<div class="card" style="margin-top:22px"><h4>Tour guide access</h4><div class="k">Sign in with the guide passcode to see tours and take notes.</div>' +
+           '<button class="btn primary" id="tSignin">Guide sign-in</button></div>');
+      return;
+    }
+    if (reload || !tours) { load(); return; }
+    var now = new Date(), t0 = new Date(now); t0.setHours(0, 0, 0, 0);
+    var t1 = new Date(t0); t1.setDate(t1.getDate() + 1);
+    var today = [], up = [], past = [];
+    tours.forEach(function (t) {
+      var d = parseDT(t.when); t._d = d;
+      if (d >= t0 && d < t1) today.push(t); else if (d >= t1) up.push(t); else past.push(t);
+    });
+    past.sort(function (a, b) { return (!!a.saved - !!b.saved) || (b._d - a._d); });
+    function rows(list, showDay) {
+      return list.map(function (t) {
+        var chip = t.saved ? '<span class="chip done">Notes saved</span>'
+          : t.outcome === 'No-show' ? '<span class="chip miss">No-show</span>'
+          : t._d < now ? '<span class="chip need">Needs notes</span>' : '<span class="chip wait">Upcoming</span>';
+        return '<div class="tour" data-id="' + esc(t.id) + '"><div class="tm">' + timeStr(t._d) + (showDay ? '<span>' + dayStr(t._d) + '</span>' : '') +
+               '</div><div class="nm">' + esc(t.name) + '</div>' + chip + '</div>';
+      }).join('');
+    }
+    var h = '<div class="tl-head"><h2>Tours</h2><button class="pill" id="tRefresh">Refresh</button></div>';
+    h += '<div class="grp">Today</div>' + (today.length ? rows(today, false) : '<div class="k" style="padding:0 2px">No tours today.</div>');
+    if (up.length) h += '<div class="grp">Coming up</div>' + rows(up, true);
+    if (past.length) h += '<div class="grp">Past 2 weeks</div>' + rows(past, true);
+    body(h);
+  }
+
+  function load() {
+    if (loading) return; loading = true;
+    body('<div class="card" style="margin-top:22px">Loading tours…</div>');
+    E.call('availTours', [E.pin()], function (list) { loading = false; tours = list; showList(false); },
+      function (m) { loading = false; body('<div class="err" style="margin-top:22px">' + esc(m) + '</div>'); });
+  }
+
+  // ---- detail / form ----
+  function opts(field, list, multi, cls) {
+    var v = f[field];
+    return '<div class="opts ' + (cls || '') + '" data-f="' + field + '"' + (multi ? ' data-multi="1"' : '') + '>' +
+      list.map(function (o) {
+        var on = multi ? (v || []).indexOf(o) >= 0 : v === o;
+        return '<button type="button" class="' + (on ? 'on' : '') + '" data-v="' + esc(o) + '">' + esc(o) + '</button>';
+      }).join('') + '</div>';
+  }
+  function fs(title, sub, inner) { return '<div class="card fs"><h5>' + title + '</h5>' + (sub ? '<div class="sub">' + sub + '</div>' : '') + inner + '</div>'; }
+  var MSHORT = MONTHS.map(function (m) { return m.slice(0, 3); });
+  function yearList() { var y = new Date().getFullYear(), o = []; for (var i = 0; i < 4; i++) o.push(String(y + i)); return o; }
+
+  function tfInputs() {
+    if (f.tfType === 'Specific date') return '<input id="tfDate" type="date" value="' + esc(f.tfDate || '') + '" style="margin-top:8px">';
+    if (f.tfType === 'Month') return '<label>Months (pick any)</label>' + opts('tfMonths', MSHORT, true, 'c4') + '<label>Year</label>' + opts('tfYears', yearList(), true);
+    if (f.tfType === 'Season') return '<div style="margin-top:8px">' + opts('tfSeason', OPT.season, false) + '</div><label>Year</label>' + opts('tfYears', yearList(), true);
+    return '';
+  }
+
+  function showTour(id) {
+    current = tours.filter(function (t) { return t.id === id; })[0]; if (!current) return showList();
+    var t = current, d = parseDT(t.when), s = t.saved || {};
+    f = {
+      outcome: s.outcome || (OPT.outcome.indexOf(t.outcome) >= 0 ? t.outcome : (d < new Date() ? 'Toured' : '')),
+      tourType: s.tourType || 'In person', tfType: s.tfType || '', tfDate: s.tfDate || '', tfMonths: s.tfMonths || [],
+      tfSeason: s.tfSeason || '', tfYears: (s.tfYears && s.tfYears.length) ? s.tfYears : [String(new Date().getFullYear() + 1)], days: s.days || [],
+      guests: s.guests || '', interest: s.interest || '', easy: s.easy || '', planning: s.planning || '', allInc: s.allInc || '',
+      budget: s.budget || '', venues: s.venues || '', next: s.next || [], followDays: s.followDays || '', nextOther: s.nextOther || '', notes: s.notes || ''
+    };
+    var phone = String(t.phone || '').replace(/[^\d+]/g, '');
+    var h = '<button class="back" id="tBack">&#8249; All tours</button>' +
+      '<div class="card"><h4>' + esc(t.name) + '</h4><div class="k">' + dayStr(d) + ', ' + d.getFullYear() + ' · ' + timeStr(d) + (t.source ? ' · ' + esc(t.source) : '') + '</div>' +
+      (t.saved ? '<div class="k" style="margin-top:4px">Last saved by ' + esc(s.guide || '?') + (s.updated ? ' · ' + esc(s.updated) : '') + '</div>' : '') +
+      '<div class="contact">' + (phone ? '<a href="tel:' + esc(phone) + '">Call</a><a href="sms:' + esc(phone) + '">Text</a>' : '') + (t.email ? '<a href="mailto:' + esc(t.email) + '">Email</a>' : '') + '</div></div>';
+    h += '<div id="tForm">' + formHtml() + '</div>';
+    body(h);
+    window.scrollTo({ top: 0 });
+  }
+
+  function formHtml() {
+    return fs('Outcome', '', opts('outcome', OPT.outcome, false, 'c3')) +
+      fs('Tour type', '', opts('tourType', OPT.tourType, false)) +
+      fs('Desired timeframe', '', opts('tfType', OPT.tfType, false) + '<div id="tfBox">' + tfInputs() + '</div>' +
+         '<label style="margin-top:12px">Open to</label>' + opts('days', OPT.days, true)) +
+      fs('Estimated guest count', '', '<input id="guests" type="number" inputmode="numeric" min="1" placeholder="e.g. 120" value="' + esc(f.guests) + '">') +
+      fs('Interest level', '', opts('interest', OPT.interest, false, 'c3')) +
+      fs('Easy to work with?', 'Internal only. Helps decide who handles them if they hire FEE.', opts('easy', OPT.easy, false, 'c3')) +
+      fs('Planning help', '', opts('planning', OPT.planning, false)) +
+      fs('All-inclusive interest', '', opts('allInc', OPT.allInc, false, 'c3')) +
+      '<details class="opt"' + (f.budget || f.venues ? ' open' : '') + '><summary>Budget &amp; other venues <span>· only if they bring it up</span></summary>' +
+        '<label>Total wedding budget</label>' + opts('budget', OPT.budget, false) +
+        '<label for="venues">Other venues they mentioned</label><input id="venues" maxlength="200" value="' + esc(f.venues) + '"></details>' +
+      fs('Next step', 'Pick any that apply.', opts('next', OPT.next, true) +
+         '<div id="fuBox" class="' + (f.next.indexOf('Follow up') >= 0 ? '' : 'hidden') + '"><label for="followDays">Follow up in how many days?</label><input id="followDays" type="number" inputmode="numeric" min="1" max="60" placeholder="e.g. 3" value="' + esc(f.followDays) + '"></div>' +
+         '<label for="nextOther">Other</label><input id="nextOther" maxlength="200" placeholder="Anything else to do next" value="' + esc(f.nextOther) + '">') +
+      fs('Notes', 'Questions they asked, concerns, the vibe they want, anything to remember.', '<textarea id="notes" rows="5" maxlength="3000">' + esc(f.notes) + '</textarea>') +
+      fs('Your name', '', '<input id="guide" maxlength="40" value="' + esc(E.store('eheGuide') || '') + '">') +
+      '<div class="savebar"><button class="btn primary" id="tSave">Save tour notes</button><div class="msg" id="tMsg"></div></div>';
+  }
+
+  function readInputs() {
+    function v(id) { var el = $(id); return el ? el.value.trim() : undefined; }
+    if ($('tfDate')) f.tfDate = v('tfDate');
+    f.guests = v('guests'); f.venues = v('venues'); f.followDays = v('followDays'); f.nextOther = v('nextOther'); f.notes = v('notes');
+  }
+  function timeframeText() {
+    if (f.tfType === 'Specific date' && f.tfDate) { var d = parseDT(f.tfDate); return DOW[d.getDay()] + ', ' + MONTHS[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear(); }
+    var yrs = sortedYears().join(' or ');
+    if (f.tfType === 'Month' && f.tfMonths.length) return sortedMonths().join(', ') + (yrs ? ' ' + yrs : '');
+    if (f.tfType === 'Season' && f.tfSeason) return f.tfSeason + (yrs ? ' ' + yrs : '');
+    if (f.tfType === 'Not sure yet') return 'Not sure yet';
+    return '';
+  }
+
+  function sortedMonths() { return f.tfMonths.slice().sort(function (a, b) { return MSHORT.indexOf(a) - MSHORT.indexOf(b); }); }
+  function sortedYears() { return f.tfYears.slice().sort(); }
+
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (t.id === 'tSignin') { E.openSignin(); return; }
+    if (t.id === 'tRefresh') { load(); return; }
+    if (t.id === 'tBack') { showList(false); window.scrollTo({ top: 0 }); return; }
+    var row = t.closest && t.closest('.tour'); if (row) { showTour(row.getAttribute('data-id')); return; }
+    var b = t.closest && t.closest('#tForm .opts button');
+    if (b) {
+      var box = b.parentNode, field = box.getAttribute('data-f'), val = b.getAttribute('data-v');
+      if (box.getAttribute('data-multi')) {
+        var arr = f[field], i = arr.indexOf(val);
+        if (i >= 0) arr.splice(i, 1); else arr.push(val);
+        b.classList.toggle('on', i < 0);
+        if (field === 'next') $('fuBox').classList.toggle('hidden', arr.indexOf('Follow up') < 0);
+      } else {
+        f[field] = f[field] === val && field !== 'outcome' && field !== 'tourType' ? '' : val;
+        [].forEach.call(box.children, function (x) { x.classList.toggle('on', x.getAttribute('data-v') === f[field]); });
+        if (field === 'tfType') { readInputs(); $('tfBox').innerHTML = tfInputs(); }
+      }
+      return;
+    }
+    if (t.id === 'tSave') save(t);
+  });
+
+  function save(btn) {
+    readInputs();
+    var msg = $('tMsg'), guide = $('guide').value.trim();
+    function bad(m) { msg.textContent = m; msg.className = 'msg err'; }
+    if (!f.outcome) return bad('Pick an outcome.');
+    if (f.tfType === 'Month' && !f.tfMonths.length) return bad('Pick at least one month, or change the timeframe.');
+    if (!guide) return bad('Add your name.');
+    if (f.next.indexOf('Follow up') >= 0 && !(+f.followDays >= 1)) return bad('How many days until the follow-up?');
+    E.store('eheGuide', guide);
+    btn.disabled = true; msg.textContent = 'Saving to the master sheet…'; msg.className = 'msg';
+    var payload = {
+      id: current.id, row: current.row, name: current.name, when: current.when, email: current.email, phone: current.phone,
+      outcome: f.outcome, tourType: f.tourType, tfType: f.tfType, tfDate: f.tfType === 'Specific date' ? f.tfDate : '',
+      tfMonths: f.tfType === 'Month' ? sortedMonths() : [], tfSeason: f.tfType === 'Season' ? f.tfSeason : '',
+      tfYears: (f.tfType === 'Month' || f.tfType === 'Season') ? sortedYears() : [], timeframe: timeframeText(),
+      days: f.days, guests: f.guests, interest: f.interest, easy: f.easy, planning: f.planning, allInc: f.allInc,
+      budget: f.budget, venues: f.venues, next: f.next, followDays: f.next.indexOf('Follow up') >= 0 ? f.followDays : '',
+      nextOther: f.nextOther, notes: f.notes, guide: guide
+    };
+    E.call('availSaveTour', [E.pin(), payload], function (list) {
+      tours = list; showList(false); window.scrollTo({ top: 0 }); toast('Saved: ' + current.name);
+    }, function (m) { btn.disabled = false; bad(m); });
+  }
+
+  window.EHE_TOURS = { unlocked: function () { if (tab === 'tours') showList(true); }, open: function (tb) { $('tabs').querySelector('[data-tab="' + tb + '"]').click(); }, showTour: function (id) { showTour(id); }, list: function () { return tours; } };
+  if (typeof MOCK !== 'undefined' && MOCK && MOCK.demoTours) MOCK.demoTours(window.EHE_TOURS);
+}
+if (window.EHE) eheToursInit(); else window.EHE_TOURS_INIT = eheToursInit;
+</script>
+</body>
+</html>
