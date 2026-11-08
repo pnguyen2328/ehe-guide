@@ -189,30 +189,69 @@ function apiCall(fn, args, ok, fail) {
   x.send(JSON.stringify({ fn: fn, args: args }));
 }
 
+// ---- server bridge (JSON API when hosted, Apps Script when served by doGet, mock in preview) ----
+function srvCall(fn, args, ok, fail) {
+  if (API) {
+    apiCall(fn, args, ok, fail);
+  } else if (typeof google !== 'undefined' && google.script && google.script.run) {
+    var r = google.script.run.withSuccessHandler(ok).withFailureHandler(function (e) { fail((e && e.message) || String(e)); });
+    r[fn].apply(r, args);
+  } else if (MOCK) {
+    setTimeout(function () { try { ok(MOCK[fn].apply(null, args)); } catch (e) { fail(e.message); } }, 250);
+  } else { fail('Not connected.'); }
+}
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} }
+
+// Passcode the page was unlocked with before the app started (locked mode), so it doesn't ask again.
+var BOOT_PIN = null;
+
+// Starts the app. Availability is only public when the server allows it (Script Property
+// PUBLIC_AVAILABILITY = yes); otherwise the page opens on a passcode screen.
 (function boot() {
-  if (!DATA && API) {
-    document.getElementById('foot').textContent = 'Loading availability…';
-    apiCall('availPublicData', [], function (d) { DATA = d; boot(); }, function () {
-      document.querySelector('.wrap').innerHTML = '<div class="err">Could not load availability. Please refresh.</div>';
+  function el(id) { return document.getElementById(id); }
+  function fatal() { document.querySelector('.wrap').innerHTML = '<div class="err">Could not load the app. Check your connection and refresh.</div>'; }
+  if (DATA) { start(); return; }
+
+  var saved = lsGet('ehePin');
+  el('foot').textContent = 'Loading…';
+  if (saved) {
+    srvCall('availGuideData', [saved], function (d) { DATA = d; BOOT_PIN = saved; start(); }, function (m) {
+      if (/passcode/i.test(m)) { lsSet('ehePin', null); tryPublic(); } else fatal();
     });
-    return;
-  }
-  if (!DATA) {
-    document.querySelector('.wrap').innerHTML = '<div class="err">Could not load availability. Please refresh.</div>';
-    return;
+  } else { tryPublic(); }
+
+  function tryPublic() {
+    srvCall('availPublicData', [], function (d) { DATA = d; start(); }, function (m) {
+      if (/passcode/i.test(m)) lockScreen(); else fatal();
+    });
   }
 
-  // ---- server bridge (JSON API when hosted, Apps Script when served by doGet, mock in preview) ----
-  function call(fn, args, ok, fail) {
-    if (API) {
-      apiCall(fn, args, ok, fail);
-    } else if (typeof google !== 'undefined' && google.script && google.script.run) {
-      var r = google.script.run.withSuccessHandler(ok).withFailureHandler(function (e) { fail((e && e.message) || String(e)); });
-      r[fn].apply(r, args);
-    } else if (MOCK) {
-      setTimeout(function () { try { ok(MOCK[fn].apply(null, args)); } catch (e) { fail(e.message); } }, 250);
-    } else { fail('Not connected.'); }
+  function lockScreen() {
+    ['tabs', 'availView', 'toursView', 'guideBtn'].forEach(function (id) { el(id).classList.add('hidden'); });
+    el('signin').classList.remove('hidden');
+    el('signin').querySelector('.k').textContent = 'Enter the guide passcode to open the app.';
+    el('foot').textContent = '';
+    el('pin').focus();
+    function go() {
+      var p = el('pin').value.trim(); if (!p) return;
+      el('pinGo').disabled = true; el('pinMsg').textContent = 'Checking…'; el('pinMsg').className = 'msg';
+      srvCall('availGuideData', [p], function (d) {
+        lsSet('ehePin', p); DATA = d; BOOT_PIN = p;
+        el('pin').onkeydown = null; el('pin').value = ''; el('pinGo').disabled = false; el('pinMsg').textContent = '';
+        el('signin').classList.add('hidden');
+        el('signin').querySelector('.k').textContent = 'Enter the guide passcode to see who’s booked and place soft holds.';
+        ['tabs', 'availView', 'guideBtn'].forEach(function (id) { el(id).classList.remove('hidden'); });
+        start();
+      }, function (m) { el('pinGo').disabled = false; el('pinMsg').textContent = m; el('pinMsg').className = 'msg err'; });
+    }
+    el('pinGo').onclick = go;
+    el('pin').onkeydown = function (e) { if (e.key === 'Enter') go(); };
   }
+})();
+
+function start() {
+  function call(fn, args, ok, fail) { srvCall(fn, args, ok, fail); }
   function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return null; } }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 
@@ -431,12 +470,17 @@ function apiCall(fn, args, ok, fail) {
   // When availability loads over the API, the Tours script has already run and is waiting for window.EHE.
   if (window.EHE_TOURS_INIT) window.EHE_TOURS_INIT();
 
-  renderAll();
-  var saved = store('ehePin');
-  if (saved) unlock(saved, true);
+  if (BOOT_PIN) {
+    pin = BOOT_PIN; // already checked by the passcode screen or the saved-passcode check in boot()
+    renderAll();
+  } else {
+    renderAll();
+    var saved = store('ehePin');
+    if (saved) unlock(saved, true);
+  }
   if (MOCK && MOCK.demo) MOCK.demo({ unlock: unlock, select: select, setView: function (k) { view = fromKey(k); view.setDate(1); },
                                     openMode: openMode, $: $ });
-})();
+}
 </script>
 <script>
 function eheToursInit() {
