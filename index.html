@@ -275,6 +275,9 @@ function start() {
   var today = new Date(); today.setHours(0, 0, 0, 0);
   var view = new Date(today.getFullYear(), today.getMonth(), 1);
   var selected = null, mode = null, holdDays = 7, customDays = false;
+  // Soft hold <-> tour link: the hold form lists today's tours so the couple's email comes
+  // from their booking. holdTour is a tour picked from the Tours tab ("Place soft hold").
+  var holdTour = null, tourPick = '', todaysTours = null, toursLoading = false;
   var days = { 5: true, 6: true, 0: true };
   var listCount = 10;
 
@@ -304,7 +307,7 @@ function start() {
 
   function renderStatus() {
     var el = $('status');
-    if (!selected) { el.className = 'card'; el.innerHTML = 'Tap a date to check it.'; return; }
+    if (!selected) { el.className = 'card'; el.innerHTML = holdTour ? 'Tap an open date to place a soft hold for <b>' + esc(suggestName(holdTour)) + '</b>.' : 'Tap a date to check it.'; return; }
     var d = fromKey(selected), s = statusOf(selected), past = d < today, h = '';
     el.className = 'card ' + s;
     if (s === 'booked') {
@@ -333,7 +336,11 @@ function start() {
       h = '<h4>' + (past ? 'Past date' : 'Available') + '</h4><div class="k">' + longDate(d) + '</div>';
       if (!past && details && mode !== 'place') h += '<button class="btn hold" data-act="place">Place a soft hold</button>';
       if (!past && details && mode === 'place') {
-        h += '<label for="hName">Couple name</label><input id="hName" placeholder="e.g. Jamie and Alex" maxlength="80"' + NAMEATTRS + '>' +
+        h += tourPicker() +
+             '<label for="hName">Couple name</label><input id="hName" placeholder="e.g. Jamie and Alex" maxlength="80"' + NAMEATTRS + '>' +
+             '<div id="hEmailBox" class="' + (tourPick === 'other' ? '' : 'hidden') + '"><label for="hEmail">Couple\'s email</label>' +
+             '<input id="hEmail" type="email" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="120" placeholder="For the hold confirmation and reminder"></div>' +
+             '<div class="k" id="hEmailNote" style="margin-top:6px">' + emailNote() + '</div>' +
              '<label>Hold length</label>' + dayPicker() +
              '<label for="hNotes">Notes (optional)</label><textarea id="hNotes" maxlength="200" placeholder="Toured today, deciding by Friday"></textarea>' +
              byField() +
@@ -359,7 +366,82 @@ function start() {
     var v = parseInt($('customDays').value, 10);
     return v >= 1 && v <= 60 ? v : null;
   }
-  function openMode(m) { mode = m; holdDays = 7; customDays = false; renderStatus(); }
+  function openMode(m) {
+    mode = m; holdDays = 7; customDays = false;
+    if (m === 'place') {
+      tourPick = holdTour ? holdTour.id : '';
+      if (!todaysTours) loadTodaysTours();
+    }
+    renderStatus();
+    if (m === 'place' && holdTour) fillFromTour();
+  }
+
+  // ---- tour link for new holds ----
+  function isToday(when) { var m = String(when).match(/^(\d{4})-(\d{2})-(\d{2})/); return !!m && key(today) === m[1] + '-' + m[2] + '-' + m[3]; }
+  function setTours(list) { todaysTours = (list || []).filter(function (t) { return isToday(t.when) && !/^cancel/i.test(t.outcome || ''); }); }
+  function loadTodaysTours() {
+    var cached = window.EHE_TOURS && window.EHE_TOURS.list();
+    if (cached) { setTours(cached); return; }
+    if (toursLoading || !pin) return;
+    toursLoading = true;
+    call('availTours', [pin], function (list) {
+      toursLoading = false; setTours(list);
+      if (mode === 'place' && $('hName')) { var keep = keepTyped(); renderStatus(); keep(); }
+    }, function () { toursLoading = false; todaysTours = []; if (mode === 'place' && $('hName')) { var keep = keepTyped(); renderStatus(); keep(); } });
+  }
+  function keepTyped() {
+    var ids = ['hName', 'hEmail', 'hNotes', 'hBy', 'customDays'], v = {};
+    ids.forEach(function (id) { if ($(id)) v[id] = $(id).value; });
+    return function () { ids.forEach(function (id) { if ($(id) && v[id] != null) $(id).value = v[id]; }); };
+  }
+  function tourList() {
+    var list = (todaysTours || []).slice();
+    if (holdTour && !list.some(function (t) { return t.id === holdTour.id; })) list.unshift(holdTour);
+    return list;
+  }
+  function tourById(id) { return tourList().filter(function (t) { return t.id === id; })[0] || null; }
+  function tourTime(t) {
+    var m = String(t.when).match(/T(\d{2}):(\d{2})/); if (!m) return '';
+    var hh = +m[1], ap = hh >= 12 ? 'PM' : 'AM'; hh = hh % 12 || 12; return hh + ':' + m[2] + ' ' + ap;
+  }
+  function partnerOf(t) { return (t.partner != null ? t.partner : (t.saved && t.saved.partner)) || ''; }
+  // "Peter Nguyen" + partner "Kelsey" -> "Peter & Kelsey". "Nicole and Blaine" -> "Nicole & Blaine".
+  function suggestName(t) {
+    var parts = String(t.name || '').split(/\s+and\s+|\s*&\s*/i).map(function (x) { return x.trim().split(/\s+/)[0]; }).filter(Boolean);
+    var p = String(partnerOf(t)).trim().split(/\s+/)[0];
+    if (p && parts.map(function (x) { return x.toLowerCase(); }).indexOf(p.toLowerCase()) < 0) parts.push(p);
+    return parts.join(' & ');
+  }
+  function tourPicker() {
+    var list = tourList();
+    if (!list.length && todaysTours) { tourPick = 'other'; return ''; }
+    if (!list.length) return '<div class="k" style="margin-top:10px">Loading today\'s tours…</div>';
+    return '<label for="hTour">Which couple?</label><select id="hTour"><option value="">Choose…</option>' +
+      list.map(function (t) {
+        var label = (isToday(t.when) ? tourTime(t) : +t.when.slice(5, 7) + '/' + +t.when.slice(8, 10)) + ' tour · ' + t.name + (partnerOf(t) ? ' & ' + partnerOf(t) : '');
+        return '<option value="' + esc(t.id) + '"' + (tourPick === t.id ? ' selected' : '') + '>' + esc(label) + '</option>';
+      }).join('') +
+      '<option value="other"' + (tourPick === 'other' ? ' selected' : '') + '>Someone else (type name and email)</option></select>';
+  }
+  function emailNote() {
+    var t = tourPick && tourPick !== 'other' ? tourById(tourPick) : null;
+    if (t) return t.email ? 'Confirmation and reminder emails go to ' + esc(t.email) + '.' : 'This tour has no email. Choose "Someone else" and type it.';
+    if (tourPick === 'other') return 'They\'ll get a confirmation email now and a reminder on the hold\'s last day.';
+    return '';
+  }
+  function fillFromTour() {
+    var t = tourById(tourPick);
+    if (t && $('hName')) $('hName').value = suggestName(t);
+  }
+  $('status').addEventListener('change', function (e) {
+    if (e.target.id !== 'hTour') return;
+    var before = tourById(tourPick);
+    tourPick = e.target.value;
+    $('hEmailBox').classList.toggle('hidden', tourPick !== 'other');
+    $('hEmailNote').innerHTML = emailNote();
+    if (tourPick === 'other') { if (before && $('hName').value === suggestName(before)) $('hName').value = ''; }
+    else fillFromTour();
+  });
 
   function renderList() {
     var out = [], d = new Date(today), guard = 0;
@@ -442,21 +524,28 @@ function start() {
     // No automatic focus here: on iPhone it made Safari keep re-scrolling while typing.
     if (act === 'place') { openMode('place'); return; }
     if (act === 'extend' || act === 'release') { openMode(act + ':' + i); return; }
-    if (act === 'cancel') { mode = null; renderStatus(); return; }
+    if (act === 'cancel') { if (mode === 'place') holdTour = null; mode = null; renderStatus(); return; }
     if (!act) return;
 
     var by = $('hBy').value.trim();
     var h = act !== 'doPlace' ? hold[selected][i] : null;
     var nDays = act !== 'doRelease' ? readDays() : 0;
-    if (act === 'doPlace' && !need($('hName').value.trim(), 'Add the couple\'s name.')) return;
+    if (act === 'doPlace') {
+      if (!need(tourPick, 'Choose which couple this hold is for.')) return;
+      if (tourPick !== 'other' && !need((tourById(tourPick) || {}).email, 'This tour has no email. Choose "Someone else" and type it.')) return;
+      if (!need($('hName').value.trim(), 'Add the couple\'s name.')) return;
+      if (tourPick === 'other' && !need(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test($('hEmail').value.trim()), 'Add the couple\'s email.')) return;
+    }
     if (act !== 'doRelease' && !need(nDays, 'Enter a number of days from 1 to 60.')) return;
     if (!need(by, 'Add your name.')) return;
     store('eheGuide', by);
     t.disabled = true; $('hMsg').textContent = 'Saving to the master sheet\u2026'; $('hMsg').className = 'msg';
 
     if (act === 'doPlace') {
-      call('availPlaceHold', [pin, { date: selected, name: $('hName').value.trim(), days: nDays, notes: $('hNotes').value.trim(), by: by }],
-        done('Hold placed for ' + nDays + ' days and added to the Soft Hold Tracker.'), fail(t));
+      var placed = done('Hold placed for ' + nDays + ' days. The couple will get a confirmation email within a few minutes.');
+      call('availPlaceHold', [pin, { date: selected, name: $('hName').value.trim(), days: nDays, notes: $('hNotes').value.trim(), by: by,
+        tourId: tourPick !== 'other' ? tourPick : '', email: tourPick === 'other' ? $('hEmail').value.trim() : '' }],
+        function (d) { holdTour = null; tourPick = ''; placed(d); }, fail(t));
     } else if (act === 'doExtend') {
       call('availExtendHold', [pin, { date: selected, row: h.row, name: h.name, days: nDays, by: by }],
         done('Hold extended by ' + nDays + ' days.'), fail(t));
@@ -468,6 +557,14 @@ function start() {
 
   window.EHE = {
     call: call, esc: esc, store: store,
+    // From the Tours tab: start a hold for this tour. Jumps to their desired date when it's open.
+    holdFor: function (t, dateKey) {
+      holdTour = t;
+      if (dateKey && fromKey(dateKey) >= today && statusOf(dateKey) === 'open') {
+        view = fromKey(dateKey); view.setDate(1); selected = dateKey; renderGrid(); openMode('place');
+      } else { selected = null; mode = null; renderGrid(); renderStatus(); }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
     pin: function () { return pin; },
     unlocked: function () { return !!details; },
     openSignin: function () { $('signin').classList.remove('hidden'); window.scrollTo({ top: 0, behavior: 'smooth' }); $('pin').focus(); }
@@ -609,6 +706,7 @@ function eheToursInit() {
       '<div class="card"><h4>' + esc(t.name) + '</h4><div class="k">' + dayStr(d) + ', ' + d.getFullYear() + ' · ' + timeStr(d) + (t.source ? ' · ' + esc(t.source) : '') + '</div>' +
       (t.saved ? '<div class="k" style="margin-top:4px">Last saved by ' + esc(s.guide || '?') + (s.updated ? ' · ' + esc(s.updated) : '') + '</div>' : '') +
       '<div id="tPartnerBox"><label for="partner">Partner’s name</label><input id="partner" maxlength="60" placeholder="First name is fine"' + NAMEATTRS + ' value="' + esc(f.partner) + '"></div>' +
+      '<button class="btn hold" id="tHold" style="margin-top:12px">Place soft hold</button>' +
       '<div class="contact">' + (phone ? '<a href="tel:' + esc(phone) + '">Call</a><a href="sms:' + esc(phone) + '">Text</a>' : '') + (t.email ? '<a href="mailto:' + esc(t.email) + '">Email</a>' : '') + '</div></div>';
     h += '<div id="tForm">' + formHtml() + '</div>';
     body(h);
@@ -727,6 +825,14 @@ function eheToursInit() {
     if (t.id === 'tSignin') { E.openSignin(); return; }
     if (t.id === 'tRefresh') { load(); return; }
     if (t.id === 'tBack') { flush(); showList(false); window.scrollTo({ top: 0 }); return; }
+    if (t.id === 'tHold' && current) {
+      flush();
+      var ht = { id: current.id, name: current.name, when: current.when, email: current.email, outcome: current.outcome, partner: f.partner || '' };
+      var dk = f.tfType === 'Specific date' && f.tfDate ? f.tfDate : '';
+      $('tabs').querySelector('[data-tab="avail"]').click();
+      E.holdFor(ht, dk);
+      return;
+    }
     var row = t.closest && t.closest('.tour'); if (row) { showTour(row.getAttribute('data-id')); return; }
     var b = t.closest && t.closest('#tForm .opts button');
     if (b) {
