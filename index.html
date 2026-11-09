@@ -504,7 +504,7 @@ function eheToursInit() {
 
   // ---- option sets (labels are what gets saved to the sheet) ----
   var OPT = {
-    outcome: ['Toured', 'No-show', 'Cancelled'],
+    outcome: ['Toured', 'No-show', 'Cancelled', 'Booked couple visit'],
     tourType: ['In person', 'Virtual'],
     tfType: ['Specific date', 'Month', 'Season', 'Not sure yet'],
     season: ['Spring', 'Summer', 'Fall', 'Winter'],
@@ -547,11 +547,12 @@ function eheToursInit() {
     function rows(list, showDay) {
       return list.map(function (t) {
         var chip = t.saved && t.saved.status === 'Autosaved' ? '<span class="chip need">Not finished</span>'
+          : t.saved && t.saved.outcome === 'Booked couple visit' ? '<span class="chip done">Booked visit</span>'
           : t.saved ? '<span class="chip done">Notes saved</span>'
           : t.outcome === 'No-show' ? '<span class="chip miss">No-show</span>'
           : t._d < now ? '<span class="chip need">Needs notes</span>' : '<span class="chip wait">Upcoming</span>';
         return '<div class="tour" data-id="' + esc(t.id) + '"><div class="tm">' + timeStr(t._d) + (showDay ? '<span>' + dayStr(t._d) + '</span>' : '') +
-               '</div><div class="nm">' + esc(t.name) + '</div>' + chip + '</div>';
+               '</div><div class="nm">' + esc(t.name) + (t.saved && t.saved.partner ? ' &amp; ' + esc(t.saved.partner) : '') + '</div>' + chip + '</div>';
       }).join('');
     }
     var h = '<div class="tl-head"><h2>Tours</h2><button class="pill" id="tRefresh">Refresh</button></div>';
@@ -596,7 +597,8 @@ function eheToursInit() {
       tourType: s.tourType || 'In person', tfType: s.tfType || '', tfDate: s.tfDate || '', tfMonths: s.tfMonths || [],
       tfSeason: s.tfSeason || '', tfYears: (s.tfYears && s.tfYears.length) ? s.tfYears : [String(new Date().getFullYear() + 1)], days: s.days || [],
       guests: s.guests || '', interest: s.interest || '', easy: s.easy || '', planning: s.planning || '', allInc: s.allInc || '',
-      budget: s.budget || '', venues: s.venues || '', next: s.next || [], followDays: s.followDays || '', nextOther: s.nextOther || '', notes: s.notes || ''
+      budget: s.budget || '', venues: s.venues || '', next: s.next || [], followDays: s.followDays || '', nextOther: s.nextOther || '', notes: s.notes || '',
+      partner: s.partner || ''
     };
     guideName = E.store('eheGuide') || '';
     // Answers typed on this phone that haven't reached the sheet yet (refresh, lost signal) win.
@@ -606,6 +608,7 @@ function eheToursInit() {
     var h = '<button class="back" id="tBack">&#8249; All tours</button>' +
       '<div class="card"><h4>' + esc(t.name) + '</h4><div class="k">' + dayStr(d) + ', ' + d.getFullYear() + ' · ' + timeStr(d) + (t.source ? ' · ' + esc(t.source) : '') + '</div>' +
       (t.saved ? '<div class="k" style="margin-top:4px">Last saved by ' + esc(s.guide || '?') + (s.updated ? ' · ' + esc(s.updated) : '') + '</div>' : '') +
+      '<div id="tPartnerBox"><label for="partner">Partner’s name</label><input id="partner" maxlength="60" placeholder="First name is fine"' + NAMEATTRS + ' value="' + esc(f.partner) + '"></div>' +
       '<div class="contact">' + (phone ? '<a href="tel:' + esc(phone) + '">Call</a><a href="sms:' + esc(phone) + '">Text</a>' : '') + (t.email ? '<a href="mailto:' + esc(t.email) + '">Email</a>' : '') + '</div></div>';
     h += '<div id="tForm">' + formHtml() + '</div>';
     body(h);
@@ -652,13 +655,18 @@ function eheToursInit() {
       if (current === tour) autoTimer = setTimeout(autosave, 15000);
     });
   }
-  document.addEventListener('input', function (e) { if (e.target.closest && e.target.closest('#tForm')) changed(); });
+  document.addEventListener('input', function (e) { if (e.target.closest && e.target.closest('#tForm, #tPartnerBox')) changed(); });
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flush(); });
   window.addEventListener('pagehide', flush);
 
   function payload(guide) {
+    if (isVisit()) {
+      // Booked couple's visit: only the notes matter; leave the lead questions empty in the sheet.
+      return { id: current.id, row: current.row, name: current.name, when: current.when, email: current.email, phone: current.phone,
+        outcome: f.outcome, partner: f.partner, notes: f.notes, guide: guide, tfMonths: [], tfYears: [], days: [], next: [] };
+    }
     return {
-      id: current.id, row: current.row, name: current.name, when: current.when, email: current.email, phone: current.phone,
+      id: current.id, row: current.row, name: current.name, when: current.when, email: current.email, phone: current.phone, partner: f.partner,
       outcome: f.outcome, tourType: f.tourType, tfType: f.tfType, tfDate: f.tfType === 'Specific date' ? f.tfDate : '',
       tfMonths: f.tfType === 'Month' ? sortedMonths() : [], tfSeason: f.tfType === 'Season' ? f.tfSeason : '',
       tfYears: (f.tfType === 'Month' || f.tfType === 'Season') ? sortedYears() : [], timeframe: timeframeText(),
@@ -668,8 +676,13 @@ function eheToursInit() {
     };
   }
 
+  // A booked couple's visit only needs notes, so the lead questions are hidden (answers are kept
+  // if the guide switches back to another outcome).
+  function isVisit() { return f.outcome === 'Booked couple visit'; }
   function formHtml() {
-    return fs('Outcome', '', opts('outcome', OPT.outcome, false, 'c3')) +
+    return fs('Outcome', '', opts('outcome', OPT.outcome, false, 'c3') +
+        '<div class="sub" id="visitNote" style="margin:8px 0 0" ' + (isVisit() ? '' : 'hidden') + '>Already booked, just visiting. Only notes needed, and no follow-up emails will go out.</div>') +
+      '<div id="leadQs"' + (isVisit() ? ' class="hidden"' : '') + '>' +
       fs('Tour type', '', opts('tourType', OPT.tourType, false)) +
       fs('Desired timeframe', '', opts('tfType', OPT.tfType, false) + '<div id="tfBox">' + tfInputs() + '</div>' +
          '<label style="margin-top:12px">Open to</label>' + opts('days', OPT.days, true)) +
@@ -684,6 +697,7 @@ function eheToursInit() {
       fs('Next step', 'Pick any that apply.', opts('next', OPT.next, true) +
          '<div id="fuBox" class="' + (f.next.indexOf('Follow up') >= 0 ? '' : 'hidden') + '"><label for="followDays">Follow up in how many days?</label><input id="followDays" type="number" inputmode="numeric" min="1" max="60" placeholder="e.g. 3" value="' + esc(f.followDays) + '"></div>' +
          '<label for="nextOther">Other</label><input id="nextOther" maxlength="200" placeholder="Anything else to do next" value="' + esc(f.nextOther) + '">') +
+      '</div>' +
       fs('Notes', 'Questions they asked, concerns, the vibe they want, anything to remember.', '<textarea id="notes" rows="5" maxlength="3000">' + esc(f.notes) + '</textarea>') +
       fs('Your name', '', '<input id="guide" maxlength="40"' + NAMEATTRS + ' value="' + esc(guideName) + '">') +
       '<div class="savebar"><div class="k" id="tAuto" style="text-align:center;margin-bottom:6px">Changes save automatically as you go.</div>' +
@@ -694,6 +708,7 @@ function eheToursInit() {
     function v(id) { var el = $(id); return el ? el.value.trim() : undefined; }
     if ($('tfDate')) f.tfDate = v('tfDate');
     f.guests = v('guests'); f.venues = v('venues'); f.followDays = v('followDays'); f.nextOther = v('nextOther'); f.notes = v('notes');
+    if ($('partner')) f.partner = v('partner');
   }
   function timeframeText() {
     if (f.tfType === 'Specific date' && f.tfDate) { var d = parseDT(f.tfDate); return DOW[d.getDay()] + ', ' + MONTHS[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear(); }
@@ -725,6 +740,7 @@ function eheToursInit() {
         f[field] = f[field] === val && field !== 'outcome' && field !== 'tourType' ? '' : val;
         [].forEach.call(box.children, function (x) { x.classList.toggle('on', x.getAttribute('data-v') === f[field]); });
         if (field === 'tfType') { readInputs(); $('tfBox').innerHTML = tfInputs(); }
+        if (field === 'outcome') { $('leadQs').classList.toggle('hidden', isVisit()); $('visitNote').hidden = !isVisit(); }
       }
       changed();
       return;
@@ -737,9 +753,9 @@ function eheToursInit() {
     var msg = $('tMsg'), guide = $('guide').value.trim();
     function bad(m) { msg.textContent = m; msg.className = 'msg err'; }
     if (!f.outcome) return bad('Pick an outcome.');
-    if (f.tfType === 'Month' && !f.tfMonths.length) return bad('Pick at least one month, or change the timeframe.');
+    if (!isVisit() && f.tfType === 'Month' && !f.tfMonths.length) return bad('Pick at least one month, or change the timeframe.');
     if (!guide) return bad('Add your name.');
-    if (f.next.indexOf('Follow up') >= 0 && !(+f.followDays >= 1)) return bad('How many days until the follow-up?');
+    if (!isVisit() && f.next.indexOf('Follow up') >= 0 && !(+f.followDays >= 1)) return bad('How many days until the follow-up?');
     E.store('eheGuide', guide);
     btn.disabled = true; msg.textContent = 'Saving to the master sheet…'; msg.className = 'msg';
     clearTimeout(autoTimer); autoTimer = null;
