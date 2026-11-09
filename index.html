@@ -203,6 +203,10 @@ function srvCall(fn, args, ok, fail) {
 function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 function lsSet(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} }
 
+// Name fields: no autocorrect, predictions or contact autofill. On iPhone, the suggestion bar
+// changing size with each keystroke made Safari scroll the page while typing.
+var NAMEATTRS = ' autocomplete="off" autocorrect="off" spellcheck="false" autocapitalize="words"';
+
 // Passcode the page was unlocked with before the app started (locked mode), so it doesn't ask again.
 var BOOT_PIN = null;
 
@@ -329,7 +333,7 @@ function start() {
       h = '<h4>' + (past ? 'Past date' : 'Available') + '</h4><div class="k">' + longDate(d) + '</div>';
       if (!past && details && mode !== 'place') h += '<button class="btn hold" data-act="place">Place a soft hold</button>';
       if (!past && details && mode === 'place') {
-        h += '<label for="hName">Couple name</label><input id="hName" placeholder="e.g. Jamie and Alex" maxlength="80">' +
+        h += '<label for="hName">Couple name</label><input id="hName" placeholder="e.g. Jamie and Alex" maxlength="80"' + NAMEATTRS + '>' +
              '<label>Hold length</label>' + dayPicker() +
              '<label for="hNotes">Notes (optional)</label><textarea id="hNotes" maxlength="200" placeholder="Toured today, deciding by Friday"></textarea>' +
              byField() +
@@ -348,7 +352,7 @@ function start() {
       '<input id="customDays" class="' + (customDays ? '' : 'hidden') + '" type="number" inputmode="numeric" min="1" max="60" placeholder="Number of days (e.g. 5 or 10)" style="margin-top:8px">';
   }
   function byField() {
-    return '<label for="hBy">Your name</label><input id="hBy" maxlength="40" value="' + esc(store('eheGuide') || '') + '">';
+    return '<label for="hBy">Your name</label><input id="hBy" maxlength="40"' + NAMEATTRS + ' value="' + esc(store('eheGuide') || '') + '">';
   }
   function readDays() {
     if (!customDays) return holdDays;
@@ -435,7 +439,8 @@ function start() {
       return;
     }
     var act = t.getAttribute('data-act'), i = +t.getAttribute('data-i');
-    if (act === 'place') { openMode('place'); $('hName').focus(); return; }
+    // No automatic focus here: on iPhone it made Safari keep re-scrolling while typing.
+    if (act === 'place') { openMode('place'); return; }
     if (act === 'extend' || act === 'release') { openMode(act + ':' + i); return; }
     if (act === 'cancel') { mode = null; renderStatus(); return; }
     if (!act) return;
@@ -515,6 +520,7 @@ function eheToursInit() {
   // ---- tabs ----
   $('tabs').addEventListener('click', function (e) {
     var b = e.target.closest('button'); if (!b) return;
+    flush();
     tab = b.getAttribute('data-tab');
     [].forEach.call($('tabs').children, function (x) { x.classList.toggle('on', x === b); });
     $('availView').classList.toggle('hidden', tab !== 'avail');
@@ -540,7 +546,8 @@ function eheToursInit() {
     past.sort(function (a, b) { return (!!a.saved - !!b.saved) || (b._d - a._d); });
     function rows(list, showDay) {
       return list.map(function (t) {
-        var chip = t.saved ? '<span class="chip done">Notes saved</span>'
+        var chip = t.saved && t.saved.status === 'Autosaved' ? '<span class="chip need">Not finished</span>'
+          : t.saved ? '<span class="chip done">Notes saved</span>'
           : t.outcome === 'No-show' ? '<span class="chip miss">No-show</span>'
           : t._d < now ? '<span class="chip need">Needs notes</span>' : '<span class="chip wait">Upcoming</span>';
         return '<div class="tour" data-id="' + esc(t.id) + '"><div class="tm">' + timeStr(t._d) + (showDay ? '<span>' + dayStr(t._d) + '</span>' : '') +
@@ -591,6 +598,10 @@ function eheToursInit() {
       guests: s.guests || '', interest: s.interest || '', easy: s.easy || '', planning: s.planning || '', allInc: s.allInc || '',
       budget: s.budget || '', venues: s.venues || '', next: s.next || [], followDays: s.followDays || '', nextOther: s.nextOther || '', notes: s.notes || ''
     };
+    guideName = E.store('eheGuide') || '';
+    // Answers typed on this phone that haven't reached the sheet yet (refresh, lost signal) win.
+    var local = readLocal(t.id), restored = false;
+    if (local && local.f) { for (var k in local.f) if (local.f.hasOwnProperty(k)) f[k] = local.f[k]; if (local.guide) guideName = local.guide; restored = true; }
     var phone = String(t.phone || '').replace(/[^\d+]/g, '');
     var h = '<button class="back" id="tBack">&#8249; All tours</button>' +
       '<div class="card"><h4>' + esc(t.name) + '</h4><div class="k">' + dayStr(d) + ', ' + d.getFullYear() + ' · ' + timeStr(d) + (t.source ? ' · ' + esc(t.source) : '') + '</div>' +
@@ -599,6 +610,62 @@ function eheToursInit() {
     h += '<div id="tForm">' + formHtml() + '</div>';
     body(h);
     window.scrollTo({ top: 0 });
+    if (restored) { autoMsg('Restored answers from this phone that hadn’t reached the sheet yet. Saving them now…'); autoTimer = setTimeout(autosave, 800); }
+  }
+
+  // ---- autosave ----
+  // Every change is kept on this phone right away (survives a refresh or lost signal), and sent to
+  // the sheet a few seconds after the guide stops typing. "Finish & save" still checks the form.
+  var guideName = '', autoTimer = null, autoBusy = false, autoAgain = false;
+  function draftKey(id) { return 'eheDraft:' + id; }
+  function readLocal(id) { try { return JSON.parse(E.store(draftKey(id)) || 'null'); } catch (e) { return null; } }
+  function autoMsg(t) { var el = $('tAuto'); if (el) el.textContent = t; }
+  function changed() {
+    if (!current) return;
+    readInputs();
+    E.store(draftKey(current.id), JSON.stringify({ f: f, guide: $('guide') ? $('guide').value.trim() : '', ts: Date.now() }));
+    autoMsg('Saving…');
+    clearTimeout(autoTimer); autoTimer = setTimeout(autosave, 2500);
+  }
+  function flush() { if (autoTimer) { clearTimeout(autoTimer); autoTimer = null; autosave(); } }
+  function autosave() {
+    autoTimer = null;
+    if (!current) return;
+    if (autoBusy) { autoAgain = true; return; }
+    var tour = current, sentAt = Date.now(), g = $('guide') ? $('guide').value.trim() : guideName;
+    var p = payload(g);
+    autoBusy = true;
+    E.call('availSaveTourDraft', [E.pin(), p], function (r) {
+      autoBusy = false;
+      var prev = tour.saved || {};
+      tour.saved = JSON.parse(JSON.stringify(f));
+      tour.saved.guide = g || prev.guide || ''; tour.saved.updated = r.updated;
+      tour.saved.status = prev.status === 'Saved' ? 'Saved' : 'Autosaved';
+      if (p.outcome) tour.outcome = p.outcome;
+      var local = readLocal(tour.id);
+      if (local && local.ts <= sentAt) E.store(draftKey(tour.id), null);
+      if (current === tour) autoMsg('Saved to the sheet automatically · ' + r.updated);
+      if (autoAgain) { autoAgain = false; autosave(); }
+    }, function () {
+      autoBusy = false; autoAgain = false;
+      if (current === tour) autoMsg('Not in the sheet yet (no connection). Your answers are kept on this phone and will retry.');
+      if (current === tour) autoTimer = setTimeout(autosave, 15000);
+    });
+  }
+  document.addEventListener('input', function (e) { if (e.target.closest && e.target.closest('#tForm')) changed(); });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flush(); });
+  window.addEventListener('pagehide', flush);
+
+  function payload(guide) {
+    return {
+      id: current.id, row: current.row, name: current.name, when: current.when, email: current.email, phone: current.phone,
+      outcome: f.outcome, tourType: f.tourType, tfType: f.tfType, tfDate: f.tfType === 'Specific date' ? f.tfDate : '',
+      tfMonths: f.tfType === 'Month' ? sortedMonths() : [], tfSeason: f.tfType === 'Season' ? f.tfSeason : '',
+      tfYears: (f.tfType === 'Month' || f.tfType === 'Season') ? sortedYears() : [], timeframe: timeframeText(),
+      days: f.days, guests: f.guests, interest: f.interest, easy: f.easy, planning: f.planning, allInc: f.allInc,
+      budget: f.budget, venues: f.venues, next: f.next, followDays: f.next.indexOf('Follow up') >= 0 ? f.followDays : '',
+      nextOther: f.nextOther, notes: f.notes, guide: guide
+    };
   }
 
   function formHtml() {
@@ -618,8 +685,9 @@ function eheToursInit() {
          '<div id="fuBox" class="' + (f.next.indexOf('Follow up') >= 0 ? '' : 'hidden') + '"><label for="followDays">Follow up in how many days?</label><input id="followDays" type="number" inputmode="numeric" min="1" max="60" placeholder="e.g. 3" value="' + esc(f.followDays) + '"></div>' +
          '<label for="nextOther">Other</label><input id="nextOther" maxlength="200" placeholder="Anything else to do next" value="' + esc(f.nextOther) + '">') +
       fs('Notes', 'Questions they asked, concerns, the vibe they want, anything to remember.', '<textarea id="notes" rows="5" maxlength="3000">' + esc(f.notes) + '</textarea>') +
-      fs('Your name', '', '<input id="guide" maxlength="40" value="' + esc(E.store('eheGuide') || '') + '">') +
-      '<div class="savebar"><button class="btn primary" id="tSave">Save tour notes</button><div class="msg" id="tMsg"></div></div>';
+      fs('Your name', '', '<input id="guide" maxlength="40"' + NAMEATTRS + ' value="' + esc(guideName) + '">') +
+      '<div class="savebar"><div class="k" id="tAuto" style="text-align:center;margin-bottom:6px">Changes save automatically as you go.</div>' +
+      '<button class="btn primary" id="tSave">Finish &amp; save tour notes</button><div class="msg" id="tMsg"></div></div>';
   }
 
   function readInputs() {
@@ -643,7 +711,7 @@ function eheToursInit() {
     var t = e.target;
     if (t.id === 'tSignin') { E.openSignin(); return; }
     if (t.id === 'tRefresh') { load(); return; }
-    if (t.id === 'tBack') { showList(false); window.scrollTo({ top: 0 }); return; }
+    if (t.id === 'tBack') { flush(); showList(false); window.scrollTo({ top: 0 }); return; }
     var row = t.closest && t.closest('.tour'); if (row) { showTour(row.getAttribute('data-id')); return; }
     var b = t.closest && t.closest('#tForm .opts button');
     if (b) {
@@ -658,6 +726,7 @@ function eheToursInit() {
         [].forEach.call(box.children, function (x) { x.classList.toggle('on', x.getAttribute('data-v') === f[field]); });
         if (field === 'tfType') { readInputs(); $('tfBox').innerHTML = tfInputs(); }
       }
+      changed();
       return;
     }
     if (t.id === 'tSave') save(t);
@@ -673,17 +742,12 @@ function eheToursInit() {
     if (f.next.indexOf('Follow up') >= 0 && !(+f.followDays >= 1)) return bad('How many days until the follow-up?');
     E.store('eheGuide', guide);
     btn.disabled = true; msg.textContent = 'Saving to the master sheet…'; msg.className = 'msg';
-    var payload = {
-      id: current.id, row: current.row, name: current.name, when: current.when, email: current.email, phone: current.phone,
-      outcome: f.outcome, tourType: f.tourType, tfType: f.tfType, tfDate: f.tfType === 'Specific date' ? f.tfDate : '',
-      tfMonths: f.tfType === 'Month' ? sortedMonths() : [], tfSeason: f.tfType === 'Season' ? f.tfSeason : '',
-      tfYears: (f.tfType === 'Month' || f.tfType === 'Season') ? sortedYears() : [], timeframe: timeframeText(),
-      days: f.days, guests: f.guests, interest: f.interest, easy: f.easy, planning: f.planning, allInc: f.allInc,
-      budget: f.budget, venues: f.venues, next: f.next, followDays: f.next.indexOf('Follow up') >= 0 ? f.followDays : '',
-      nextOther: f.nextOther, notes: f.notes, guide: guide
-    };
-    E.call('availSaveTour', [E.pin(), payload], function (list) {
-      tours = list; showList(false); window.scrollTo({ top: 0 }); toast('Saved: ' + current.name);
+    clearTimeout(autoTimer); autoTimer = null;
+    var tour = current, sentAt = Date.now();
+    E.call('availSaveTour', [E.pin(), payload(guide)], function (list) {
+      var local = readLocal(tour.id);
+      if (local && local.ts <= sentAt) E.store(draftKey(tour.id), null);
+      tours = list; showList(false); window.scrollTo({ top: 0 }); toast('Saved: ' + tour.name);
     }, function (m) { btn.disabled = false; bad(m); });
   }
 
