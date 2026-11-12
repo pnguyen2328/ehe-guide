@@ -682,7 +682,7 @@ function eheToursInit() {
   function tfInputs() {
     if (f.tfType === 'Specific date') return '<input id="tfDate" type="date" value="' + esc(f.tfDate || '') + '" style="margin-top:8px">';
     if (f.tfType === 'Month') return '<label>Months (pick any)</label>' + opts('tfMonths', MSHORT, true, 'c4') + '<label>Year</label>' + opts('tfYears', yearList(), true);
-    if (f.tfType === 'Season') return '<div style="margin-top:8px">' + opts('tfSeason', OPT.season, false) + '</div><label>Year</label>' + opts('tfYears', yearList(), true);
+    if (f.tfType === 'Season') return '<div style="margin-top:8px">' + '<label style="margin-top:0">Seasons (pick any)</label>' + opts('tfSeason', OPT.season, true) + '</div><label>Year</label>' + opts('tfYears', yearList(), true);
     return '';
   }
 
@@ -692,7 +692,7 @@ function eheToursInit() {
     f = {
       outcome: s.outcome || (OPT.outcome.indexOf(t.outcome) >= 0 ? t.outcome : (d < new Date() ? 'Toured' : '')),
       tourType: s.tourType || 'In person', tfType: s.tfType || '', tfDate: s.tfDate || '', tfMonths: s.tfMonths || [],
-      tfSeason: s.tfSeason || '', tfYears: (s.tfYears && s.tfYears.length) ? s.tfYears : [String(new Date().getFullYear() + 1)], days: s.days || [],
+      tfSeason: seasonList(s.tfSeason), tfYears: (s.tfYears && s.tfYears.length) ? s.tfYears : [String(new Date().getFullYear() + 1)], days: s.days || [],
       guests: s.guests || '', interest: s.interest || '', easy: s.easy || '', planning: s.planning || '', allInc: s.allInc || '',
       budget: s.budget || '', venues: s.venues || '', next: s.next || [], followDays: s.followDays || '', nextOther: s.nextOther || '', notes: s.notes || '',
       partner: s.partner || ''
@@ -701,6 +701,7 @@ function eheToursInit() {
     // Answers typed on this phone that haven't reached the sheet yet (refresh, lost signal) win.
     var local = readLocal(t.id), restored = false;
     if (local && local.f) { for (var k in local.f) if (local.f.hasOwnProperty(k)) f[k] = local.f[k]; if (local.guide) guideName = local.guide; restored = true; }
+    f.tfSeason = seasonList(f.tfSeason);
     var phone = String(t.phone || '').replace(/[^\d+]/g, '');
     var h = '<button class="back" id="tBack">&#8249; All tours</button>' +
       '<div class="card"><h4>' + esc(t.name) + '</h4><div class="k">' + dayStr(d) + ', ' + d.getFullYear() + ' · ' + timeStr(d) + (t.source ? ' · ' + esc(t.source) : '') + '</div>' +
@@ -766,7 +767,7 @@ function eheToursInit() {
     return {
       id: current.id, row: current.row, name: current.name, when: current.when, email: current.email, phone: current.phone, partner: f.partner,
       outcome: f.outcome, tourType: f.tourType, tfType: f.tfType, tfDate: f.tfType === 'Specific date' ? f.tfDate : '',
-      tfMonths: f.tfType === 'Month' ? sortedMonths() : [], tfSeason: f.tfType === 'Season' ? f.tfSeason : '',
+      tfMonths: f.tfType === 'Month' ? sortedMonths() : [], tfSeason: f.tfType === 'Season' ? sortedSeasons() : [],
       tfYears: (f.tfType === 'Month' || f.tfType === 'Season') ? sortedYears() : [], timeframe: timeframeText(),
       days: f.days, guests: f.guests, interest: f.interest, easy: f.easy, planning: f.planning, allInc: f.allInc,
       budget: f.budget, venues: f.venues, next: f.next, followDays: f.next.indexOf('Follow up') >= 0 ? f.followDays : '',
@@ -812,11 +813,14 @@ function eheToursInit() {
     if (f.tfType === 'Specific date' && f.tfDate) { var d = parseDT(f.tfDate); return DOW[d.getDay()] + ', ' + MONTHS[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear(); }
     var yrs = sortedYears().join(' or ');
     if (f.tfType === 'Month' && f.tfMonths.length) return sortedMonths().join(', ') + (yrs ? ' ' + yrs : '');
-    if (f.tfType === 'Season' && f.tfSeason) return f.tfSeason + (yrs ? ' ' + yrs : '');
+    if (f.tfType === 'Season' && f.tfSeason.length) return sortedSeasons().join(', ') + (yrs ? ' ' + yrs : '');
     if (f.tfType === 'Not sure yet') return 'Not sure yet';
     return '';
   }
 
+  // Seasons are multi-select. Older saves (and phone drafts) hold one season as plain text.
+  function seasonList(v) { return Array.isArray(v) ? v.slice() : (v ? [v] : []); }
+  function sortedSeasons() { return f.tfSeason.slice().sort(function (a, b) { return OPT.season.indexOf(a) - OPT.season.indexOf(b); }); }
   function sortedMonths() { return f.tfMonths.slice().sort(function (a, b) { return MSHORT.indexOf(a) - MSHORT.indexOf(b); }); }
   function sortedYears() { return f.tfYears.slice().sort(); }
 
@@ -860,6 +864,7 @@ function eheToursInit() {
     function bad(m) { msg.textContent = m; msg.className = 'msg err'; }
     if (!f.outcome) return bad('Pick an outcome.');
     if (!isVisit() && f.tfType === 'Month' && !f.tfMonths.length) return bad('Pick at least one month, or change the timeframe.');
+    if (!isVisit() && f.tfType === 'Season' && !f.tfSeason.length) return bad('Pick at least one season, or change the timeframe.');
     if (!guide) return bad('Add your name.');
     if (!isVisit() && f.next.indexOf('Follow up') >= 0 && !(+f.followDays >= 1)) return bad('How many days until the follow-up?');
     E.store('eheGuide', guide);
