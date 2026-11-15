@@ -569,11 +569,13 @@ function start() {
     unlocked: function () { return !!details; },
     openSignin: function () { $('signin').classList.remove('hidden'); window.scrollTo({ top: 0, behavior: 'smooth' }); $('pin').focus(); }
   };
+  // Passcode first: the Tours tab opens by default and asks for tours as soon as it starts.
+  if (BOOT_PIN) pin = BOOT_PIN; // already checked by the passcode screen or the saved-passcode check in boot()
+
   // When availability loads over the API, the Tours script has already run and is waiting for window.EHE.
   if (window.EHE_TOURS_INIT) window.EHE_TOURS_INIT();
 
   if (BOOT_PIN) {
-    pin = BOOT_PIN; // already checked by the passcode screen or the saved-passcode check in boot()
     renderAll();
   } else {
     renderAll();
