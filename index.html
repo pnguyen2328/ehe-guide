@@ -316,7 +316,7 @@ function start() {
     } else if (s === 'hold') {
       h = '<h4>Soft hold</h4><div class="k">' + longDate(d) + '</div>';
       if (details) h += '<div class="who">' + hold[selected].map(function (x, i) {
-        var t = '<div class="k">Held by</div><div><b>' + esc(x.name) + '</b></div><div class="k">Hold expires ' + esc(x.ends) + (x.notes ? ' · ' + esc(x.notes) : '') + '</div>';
+        var t = '<div class="k">Held by</div><div><b>' + esc(x.name) + '</b></div><div class="k">Held through ' + esc(x.ends) + (x.notes ? ' · ' + esc(x.notes) : '') + '</div>';
         if (mode === 'extend:' + i) {
           t += '<label>Extend by</label>' + dayPicker() + byField() +
                '<button class="btn hold" data-act="doExtend" data-i="' + i + '">Extend hold</button>' +
