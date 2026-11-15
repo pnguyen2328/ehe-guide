@@ -129,11 +129,11 @@
   </div>
 
   <div class="tabs" id="tabs">
-    <button data-tab="avail" class="on">Availability</button>
-    <button data-tab="tours">Tours</button>
+    <button data-tab="tours" class="on">Tours</button>
+    <button data-tab="avail">Availability</button>
   </div>
 
-  <section id="availView">
+  <section id="availView" class="hidden">
   <div class="nav">
     <h2 id="month"></h2>
     <div class="navr">
@@ -162,7 +162,7 @@
   </div>
   </section>
 
-  <section id="toursView" class="hidden"><div id="toursBody"></div></section>
+  <section id="toursView"><div id="toursBody"></div></section>
 
   <footer id="foot"></footer>
 </div>
@@ -245,7 +245,7 @@ var BOOT_PIN = null;
         el('pin').onkeydown = null; el('pin').value = ''; el('pinGo').disabled = false; el('pinMsg').textContent = '';
         el('signin').classList.add('hidden');
         el('signin').querySelector('.k').textContent = 'Enter the guide passcode to see who’s booked and place soft holds.';
-        ['tabs', 'availView', 'guideBtn'].forEach(function (id) { el(id).classList.remove('hidden'); });
+        ['tabs', 'toursView', 'guideBtn'].forEach(function (id) { el(id).classList.remove('hidden'); }); // Tours is the default tab
         start();
       }, function (m) { el('pinGo').disabled = false; el('pinMsg').textContent = m; el('pinMsg').className = 'msg err'; });
     }
@@ -590,7 +590,7 @@ function eheToursInit() {
   var E = window.EHE, esc = E.esc;
   var MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   var DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  var tours = null, current = null, f = null, loading = false, tab = 'avail';
+  var tours = null, current = null, f = null, loading = false, tab = 'tours'; // Tours is the default tab
   function $(id) { return document.getElementById(id); }
   function body(h) { $('toursBody').innerHTML = h; }
   function pad(n) { return (n < 10 ? '0' : '') + n; }
@@ -879,6 +879,7 @@ function eheToursInit() {
   }
 
   window.EHE_TOURS = { unlocked: function () { if (tab === 'tours') showList(true); }, open: function (tb) { $('tabs').querySelector('[data-tab="' + tb + '"]').click(); }, showTour: function (id) { showTour(id); }, list: function () { return tours; } };
+  showList(false); // Tours opens first: tour list if signed in, otherwise the sign-in prompt
   if (typeof MOCK !== 'undefined' && MOCK && MOCK.demoTours) MOCK.demoTours(window.EHE_TOURS);
 }
 if (window.EHE) eheToursInit(); else window.EHE_TOURS_INIT = eheToursInit;
