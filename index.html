@@ -644,7 +644,7 @@ function eheToursInit() {
     planning: ['Has a planner', 'Needs one (FEE)', 'Undecided'],
     allInc: ['Yes', 'Maybe', 'No'],
     budget: ['Under $25k', '$25–40k', '$40–60k', '$60k+'],
-    next: ['Send pricing', 'Send contract', 'Place soft hold', 'Schedule 2nd visit', 'Follow up', 'Ready to book', 'Not a fit']
+    next: ['Send pricing', 'Send availability', 'Send contract', 'Place soft hold', 'Schedule 2nd visit', 'Ready to book', 'Not a fit']
   };
 
   // ---- tabs ----
@@ -806,7 +806,7 @@ function eheToursInit() {
       tfMonths: f.tfType === 'Month' ? sortedMonths() : [], tfSeason: f.tfType === 'Season' ? sortedSeasons() : [],
       tfYears: f.tfType === 'Month' ? usedYears(f.tfMonths) : f.tfType === 'Season' ? usedYears(f.tfSeason) : [], timeframe: timeframeText(),
       days: f.days, guests: f.guests, interest: f.interest, easy: f.easy, planning: f.planning, allInc: f.allInc,
-      budget: f.budget, venues: f.venues, next: f.next, followDays: f.next.indexOf('Follow up') >= 0 ? f.followDays : '',
+      budget: f.budget, venues: f.venues, next: f.next, followDays: '',
       nextOther: f.nextOther, notes: f.notes, guide: guide
     };
   }
@@ -829,9 +829,8 @@ function eheToursInit() {
       '<details class="opt"' + (f.budget || f.venues ? ' open' : '') + '><summary>Budget &amp; other venues <span>· only if they bring it up</span></summary>' +
         '<label>Total wedding budget</label>' + opts('budget', OPT.budget, false) +
         '<label for="venues">Other venues they mentioned</label><input id="venues" maxlength="200" value="' + esc(f.venues) + '"></details>' +
-      fs('Next step', 'Pick any that apply.', opts('next', OPT.next, true) +
-         '<div id="fuBox" class="' + (f.next.indexOf('Follow up') >= 0 ? '' : 'hidden') + '"><label for="followDays">Follow up in how many days?</label><input id="followDays" type="number" inputmode="numeric" min="1" max="60" placeholder="e.g. 3" value="' + esc(f.followDays) + '"></div>' +
-         '<label for="nextOther">Other</label><input id="nextOther" maxlength="200" placeholder="Anything else to do next" value="' + esc(f.nextOther) + '">') +
+      fs('Next step', 'Pick any that apply. "Send pricing", "Send availability" and anything typed in Other get a follow-up email draft.', opts('next', OPT.next, true) +
+         '<label for="nextOther">Other things to send or do</label><textarea id="nextOther" rows="4" maxlength="1000" placeholder="e.g. brochure, hotel recs, BBQ caterers, itemize pricing for 120 guests">' + esc(f.nextOther) + '</textarea>') +
       '</div>' +
       fs('Notes', 'Questions they asked, concerns, the vibe they want, anything to remember.', '<textarea id="notes" rows="5" maxlength="3000">' + esc(f.notes) + '</textarea>') +
       fs('Your name', '', '<input id="guide" maxlength="40"' + NAMEATTRS + ' value="' + esc(guideName) + '">') +
@@ -909,7 +908,6 @@ function eheToursInit() {
         var arr = f[field], i = arr.indexOf(val);
         if (i >= 0) arr.splice(i, 1); else arr.push(val);
         b.classList.toggle('on', i < 0);
-        if (field === 'next') $('fuBox').classList.toggle('hidden', arr.indexOf('Follow up') < 0);
         if (field === 'tfYears') {
           // Dropping a year drops the months/seasons picked under it, then the rows are redrawn.
           if (i >= 0) { f.tfMonths = f.tfMonths.filter(function (x) { return yearOf(x) !== val; }); f.tfSeason = f.tfSeason.filter(function (x) { return yearOf(x) !== val; }); }
@@ -935,7 +933,6 @@ function eheToursInit() {
     if (!isVisit() && f.tfType === 'Month' && !f.tfMonths.length) return bad('Pick at least one month, or change the timeframe.');
     if (!isVisit() && f.tfType === 'Season' && !f.tfSeason.length) return bad('Pick at least one season, or change the timeframe.');
     if (!guide) return bad('Add your name.');
-    if (!isVisit() && f.next.indexOf('Follow up') >= 0 && !(+f.followDays >= 1)) return bad('How many days until the follow-up?');
     E.store('eheGuide', guide);
     btn.disabled = true; msg.textContent = 'Saving to the master sheet…'; msg.className = 'msg';
     clearTimeout(autoTimer); autoTimer = null;
